@@ -32,7 +32,15 @@ enum Snapshot {
                appearance: .aqua, to: outputFolder.appendingPathComponent("panel-plain-light.png"))
         session.showMore = false
 
-        // 3. Settings tabs.
+        // 3. README pictures: nothing selected, framed like the real panel, light and dark.
+        session.prepare(selection: nil, clipboard: nil, trusted: true)
+        for appearance in [NSAppearance.Name.aqua, .darkAqua] {
+            let name = appearance == .aqua ? "light" : "dark"
+            render(PanelView(store: store, session: session, controller: controller),
+                   appearance: appearance, to: outputFolder.appendingPathComponent("readme-panel-\(name).png"), framed: true)
+        }
+
+        // 4. Settings tabs.
         let router = SettingsRouter()
         for tab in [SettingsTab.general, .weekly, .combos, .dates, .scratch] {
             router.tab = tab
@@ -104,8 +112,19 @@ enum Snapshot {
         }
     }
 
-    private static func render<V: View>(_ view: V, appearance: NSAppearance.Name, to url: URL) {
-        let host = NSHostingView(rootView: view.background(Color(nsColor: .windowBackgroundColor)))
+    /// `framed` adds rounded corners, a hairline border, and a soft shadow on a transparent
+    /// background, for the README.
+    private static func render<V: View>(_ view: V, appearance: NSAppearance.Name, to url: URL, framed: Bool = false) {
+        let filled = view.background(Color(nsColor: .windowBackgroundColor))
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        let content = framed
+            ? AnyView(filled
+                .clipShape(shape)
+                .overlay(shape.strokeBorder(Color.primary.opacity(0.16)))
+                .shadow(color: .black.opacity(0.28), radius: 14, y: 6)
+                .padding(28))
+            : AnyView(filled)
+        let host = NSHostingView(rootView: content)
         host.appearance = NSAppearance(named: appearance)
         let size = host.fittingSize
         let window = NSWindow(
@@ -115,6 +134,8 @@ enum Snapshot {
             defer: false
         )
         window.appearance = NSAppearance(named: appearance)
+        window.backgroundColor = .clear
+        window.isOpaque = false
         window.contentView = host
         window.orderFrontRegardless()
         host.layoutSubtreeIfNeeded()

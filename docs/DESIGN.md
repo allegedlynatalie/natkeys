@@ -89,3 +89,14 @@ Settled in a design interview on 2026-11-04. Change these deliberately.
   single JSON file that includes the images.
 - Option+Space is fixed. If another app (for example Claude's Quick Entry) holds it, Natkeys
   warns and offers Try Again.
+
+## Releases (added 2026-11-10)
+- Public on GitHub under the MIT License. `scripts/release.sh <version>` makes a universal
+  (arm64 + x86_64, macOS 14+) app in a drag-to-Applications disk image, with a SHA-256 and draft
+  release notes. Universal builds compile each architecture with `--triple` and join them with
+  `lipo`, because the Command Line Tools can't build several architectures at once.
+- Releases are signed with the self-signed "Natkeys Local" certificate rather than ad hoc, so a
+  user's Accessibility permission carries over between versions. They aren't notarized, so the
+  first open needs Privacy & Security → Open Anyway (the README walks through it). If an Apple
+  Developer ID certificate is added later, the scripts switch to it, with the hardened runtime and
+  notarization. That changes the signature, so existing users would need Reset Permission once.

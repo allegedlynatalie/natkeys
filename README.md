@@ -1,8 +1,41 @@
 # Natkeys
 
-A menu bar hotkey utility for church media work. Press **Option+Space** anywhere to open a
-small panel at your mouse, then click once to paste a sermon title, a Sunday date, a combo of
-the two, or one of your scratch clipboards into the app you're typing in.
+A macOS menu bar app for church media: press **Option+Space** to paste sermon titles, Sunday
+dates, and graphics in one click.
+
+Natkeys opens a small panel at your mouse. Click once to paste this week's or last week's sermon
+title, a Sunday date in the format you need, a combo of the two, or one of your scratch
+clipboards into the app you're typing in. Drag a sermon graphic straight into a website's upload
+box. It's built for weekly church media work, and it's just as handy for anything else you paste
+again and again.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-panel-dark.png">
+    <img src="docs/images/readme-panel-light.png" width="520" alt="The Natkeys panel: Sermon Title This Week and Last Week, a Sermon Graphic thumbnail, a combo, a grid of Sunday dates, and scratch clipboards">
+  </picture>
+</p>
+
+## Download and install
+
+1. Download **Natkeys-x.y.z.dmg** from the [latest release](https://github.com/allegedlynatalie/natkeys/releases/latest).
+2. Open it and drag **Natkeys** into **Applications**.
+3. Open Natkeys from Applications. The first time, macOS says it can't check Natkeys for
+   malware, because the app isn't notarized by Apple. Click **Done**, then go to
+   **System Settings → Privacy & Security**, scroll down to the message about Natkeys, click
+   **Open Anyway**, and confirm. You only do this once.
+4. When asked, turn on Natkeys under **Accessibility** (see [Permissions](#permissions)).
+5. Press **Option+Space** in any app. Natkeys lives in the menu bar (⌨︎) and starts at login.
+
+Requires macOS 14 Sonoma or later, on Apple silicon or Intel.
+
+**Updating:** quit Natkeys (menu bar icon → Quit Natkeys), download the new version, and drag it
+into Applications, replacing the old one. Your groups, scratch clipboards, and the Accessibility
+permission carry over.
+
+**Uninstalling:** quit Natkeys and move it from Applications to the Trash. Your data is in
+`~/Library/Application Support/Natkeys` if you want to delete that too. You can also remove
+Natkeys from System Settings → Privacy & Security → Accessibility and from General → Login Items.
 
 ## Using it
 
@@ -61,16 +94,19 @@ switch it on when it reappears. You can also do this in Terminal:
 tccutil reset Accessibility io.github.allegedlynatalie.natkeys
 ```
 
-> The build signs Natkeys with a self-signed **Natkeys Local** certificate if one is in your
-> keychain (Keychain Access → Certificate Assistant → Create a Certificate… → Code Signing).
-> Keychain Access will say it's "not trusted"; that's fine. Because every build carries the same
-> identity, the Accessibility permission survives rebuilds. Without the certificate each build is
-> signed ad hoc, and you'd need **Reset Permission** after every reinstall.
+If Option+Space doesn't open the panel, another app may own it. Launchers and AI apps often use
+it (Claude's Quick Entry does by default). Change that app's shortcut, then use the menu bar
+icon → *Try Again*.
 
-If Option+Space doesn't open the panel, another app may own it. Claude's Quick Entry is a common
-one: change its shortcut in Claude → Settings, then use the menu bar icon → *Try Again*.
+## Privacy
 
-## Building
+Everything Natkeys stores stays on your Mac, in `~/Library/Application Support/Natkeys`. There
+are no accounts, analytics, or update checks. Natkeys reads the selected text only when you open
+its panel, and presses ⌘C and ⌘V only to copy that selection and to paste what you click. The
+only time it goes online is when you drag a picture from a web page that hands over just the
+picture's web address; then it downloads that one picture.
+
+## Building from source
 
 Needs only the Xcode Command Line Tools (Swift 6), not the full Xcode.
 
@@ -78,10 +114,25 @@ Needs only the Xcode Command Line Tools (Swift 6), not the full Xcode.
 ./scripts/install.sh        # build, copy to /Applications, launch
 ./scripts/build-app.sh      # just build build/Natkeys.app
 swift test                  # date math, weekly shift, combo template tests
+./scripts/release.sh 1.0.0  # the downloadable build/release/Natkeys-1.0.0.dmg
 ```
 
+`release.sh` builds one app for Apple silicon and Intel, packages it as a disk image, and writes
+its checksum and draft release notes. With an Apple **Developer ID Application** certificate in
+your keychain it signs for notarization, and with `NOTARY_PROFILE` set to a saved
+`xcrun notarytool store-credentials` profile it notarizes and staples the disk image, so it opens
+with no warning.
+
+> Without a Developer ID, builds are signed with a self-signed **Natkeys Local** certificate if
+> one is in your keychain (Keychain Access → Certificate Assistant → Create a Certificate… → Code
+> Signing). Keychain Access will say it's "not trusted"; that's fine. Because every build carries
+> the same identity, the Accessibility permission survives rebuilds and updates. Without any
+> certificate each build is signed ad hoc, and you'd need **Reset Permission** after every
+> reinstall.
+
 `Natkeys --snapshot <folder>` renders the panel and Settings tabs to PNGs using sample data,
-without touching your real data. It's useful for checking layout changes.
+without touching your real data. It's useful for checking layout changes, and it makes the
+pictures in this README (`readme-panel-light.png` and `readme-panel-dark.png`).
 
 ## Layout
 
@@ -95,6 +146,8 @@ Sources/Natkeys/
   Windows/             Settings and editor windows
 Tests/NatkeysCoreTests/
 docs/DESIGN.md         the decisions behind how it works
+docs/images/           README pictures (from --snapshot)
+scripts/               build, install, and release scripts
 ```
 
 ## License
