@@ -29,7 +29,7 @@ enum DropReader {
                     guard !delivered else { return }
                     delivered = true
                     if let png = ImageFiles.pngData(at: error == nil ? url : nil) {
-                        completion(.image(png))
+                        completion(.image(png, source: url))
                     } else {
                         completion(direct)
                     }

@@ -53,6 +53,17 @@ enum Snapshot {
     private static func fillSampleData(_ store: Store) {
         store.data.groups[0].thisWeek = "Grace Upon Grace"
         store.data.groups[0].lastWeek = "The Narrow Gate"
+        // Sermon Graphic starts as a text group holding a file path (what you get from dropping a
+        // file into a text box), then becomes an image group, which imports that file.
+        let graphicURL = FileManager.default.temporaryDirectory.appendingPathComponent("The Narrow Gate.jpg")
+        if let graphic = sampleGraphic(), let tiff = graphic.tiffRepresentation,
+           let jpeg = NSBitmapImageRep(data: tiff)?.representation(using: .jpeg, properties: [.compressionFactor: 0.8]) {
+            try? jpeg.write(to: graphicURL)
+        }
+        let graphicGroup = RotatingGroup(name: "Sermon Graphic", lastWeek: graphicURL.path)
+        store.data.groups.append(graphicGroup)
+        store.setKind(graphicGroup.id, .image)
+        try? FileManager.default.removeItem(at: graphicURL)
         store.addScratch(.text("https://zoom.us/j/5550100?pwd=abc"), name: "Zoom link", pinned: true)
         store.addScratch(.text("1234 Main Street\nSpringfield"), name: "Church address", pinned: true)
         if let logo = sampleImage()?.pngData {
@@ -61,6 +72,22 @@ enum Snapshot {
         store.addScratch(.text("Welcome to worship! Please silence your phones."), pinned: false)
         store.addScratch(.text("Livestream starts at 10:25"), name: "Stream note", pinned: false)
         store.addScratch(nil)
+        // Cleanup must keep every image still in use (the graphic and the logo both still show).
+        store.removeUnusedImages()
+    }
+
+    /// A 16:9 stand-in for a sermon graphic.
+    private static func sampleGraphic() -> NSImage? {
+        NSImage(size: NSSize(width: 1920, height: 1080), flipped: false) { rect in
+            NSGradient(starting: .systemTeal, ending: .systemIndigo)?.draw(in: rect, angle: -30)
+            let title = NSAttributedString(string: "The Narrow Gate", attributes: [
+                .font: NSFont.systemFont(ofSize: 150, weight: .bold),
+                .foregroundColor: NSColor.white,
+            ])
+            let size = title.size()
+            title.draw(at: NSPoint(x: (rect.width - size.width) / 2, y: (rect.height - size.height) / 2))
+            return true
+        }
     }
 
     private static func sampleImage() -> NSImage? {

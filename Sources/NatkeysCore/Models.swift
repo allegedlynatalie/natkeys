@@ -26,12 +26,45 @@ public enum WeekSlot: String, Codable, CaseIterable, Sendable, Identifiable {
     }
 }
 
+/// What a weekly group holds: text (a sermon title) or an image (a sermon graphic).
+public enum GroupKind: String, Codable, CaseIterable, Sendable, Identifiable {
+    case text
+    case image
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .text: return "Text"
+        case .image: return "Image"
+        }
+    }
+}
+
+/// An image stored in a weekly group slot.
+public struct GroupImage: Codable, Equatable, Sendable {
+    /// File inside the app's Images folder. The original format is kept (a JPG stays a JPG).
+    public var file: String
+    /// The name it was added under, e.g. "Narrow Gate.jpg". Dragging it out uses this name.
+    public var name: String
+
+    public init(file: String, name: String) {
+        self.file = file
+        self.name = name
+    }
+}
+
 /// A "This Week / Last Week" pair, e.g. Sermon Title. Shifting moves This Week into Last Week.
 public struct RotatingGroup: Codable, Identifiable, Equatable, Sendable {
     public var id: UUID
     public var name: String
+    public var kind: GroupKind
     public var thisWeek: String
     public var lastWeek: String
+    /// Used when `kind` is `.image`. Text and images are kept separately, so switching a
+    /// group's kind back and forth loses nothing.
+    public var thisWeekImage: GroupImage?
+    public var lastWeekImage: GroupImage?
     /// Whether the Sunday auto-shift applies to this group.
     public var autoShift: Bool
     /// Start of the Sunday whose weekly flip was already handled by a manual Shift,
@@ -41,15 +74,21 @@ public struct RotatingGroup: Codable, Identifiable, Equatable, Sendable {
     public init(
         id: UUID = UUID(),
         name: String,
+        kind: GroupKind = .text,
         thisWeek: String = "",
         lastWeek: String = "",
+        thisWeekImage: GroupImage? = nil,
+        lastWeekImage: GroupImage? = nil,
         autoShift: Bool = true,
         manualShiftSunday: Date? = nil
     ) {
         self.id = id
         self.name = name
+        self.kind = kind
         self.thisWeek = thisWeek
         self.lastWeek = lastWeek
+        self.thisWeekImage = thisWeekImage
+        self.lastWeekImage = lastWeekImage
         self.autoShift = autoShift
         self.manualShiftSunday = manualShiftSunday
     }
@@ -58,12 +97,16 @@ public struct RotatingGroup: Codable, Identifiable, Equatable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         name = try c.decodeIfPresent(String.self, forKey: .name) ?? "Group"
+        kind = (try? c.decodeIfPresent(GroupKind.self, forKey: .kind)) ?? .text
         thisWeek = try c.decodeIfPresent(String.self, forKey: .thisWeek) ?? ""
         lastWeek = try c.decodeIfPresent(String.self, forKey: .lastWeek) ?? ""
+        thisWeekImage = try c.decodeIfPresent(GroupImage.self, forKey: .thisWeekImage)
+        lastWeekImage = try c.decodeIfPresent(GroupImage.self, forKey: .lastWeekImage)
         autoShift = try c.decodeIfPresent(Bool.self, forKey: .autoShift) ?? true
         manualShiftSunday = try c.decodeIfPresent(Date.self, forKey: .manualShiftSunday)
     }
 
+    /// The text in a slot (text groups).
     public subscript(slot: WeekSlot) -> String {
         get { slot == .thisWeek ? thisWeek : lastWeek }
         set {
@@ -74,14 +117,41 @@ public struct RotatingGroup: Codable, Identifiable, Equatable, Sendable {
         }
     }
 
-    /// Shifting an empty This Week would wipe Last Week, so it's not allowed.
-    public var canShift: Bool {
-        !thisWeek.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    /// The image in a slot (image groups).
+    public subscript(image slot: WeekSlot) -> GroupImage? {
+        get { slot == .thisWeek ? thisWeekImage : lastWeekImage }
+        set {
+            switch slot {
+            case .thisWeek: thisWeekImage = newValue
+            case .lastWeek: lastWeekImage = newValue
+            }
+        }
     }
 
+    /// Whether a slot is empty for this group's kind.
+    public func isEmpty(_ slot: WeekSlot) -> Bool {
+        switch kind {
+        case .text: return self[slot].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .image: return self[image: slot] == nil
+        }
+    }
+
+    /// Shifting an empty This Week would wipe Last Week, so it's not allowed.
+    public var canShift: Bool {
+        !isEmpty(.thisWeek)
+    }
+
+    /// Moves This Week into Last Week (text and image alike) and clears This Week.
     public mutating func shift() {
         lastWeek = thisWeek
         thisWeek = ""
+        lastWeekImage = thisWeekImage
+        thisWeekImage = nil
+    }
+
+    /// Image files this group refers to (for cleaning up the Images folder).
+    public var imageFiles: [String] {
+        [thisWeekImage?.file, lastWeekImage?.file].compactMap { $0 }
     }
 }
 
@@ -260,6 +330,11 @@ public struct AppData: Codable, Equatable, Sendable {
         scratches = try c.decodeIfPresent([Scratch].self, forKey: .scratches) ?? []
         settings = try c.decodeIfPresent(AppSettings.self, forKey: .settings) ?? AppSettings()
         lastAutoShiftSunday = try c.decodeIfPresent(Date.self, forKey: .lastAutoShiftSunday)
+    }
+
+    /// Every file in the Images folder that the data still uses.
+    public var referencedImageFiles: Set<String> {
+        Set(scratches.compactMap(\.content.imageFile) + groups.flatMap(\.imageFiles))
     }
 
     public static let defaultDatePatterns = [

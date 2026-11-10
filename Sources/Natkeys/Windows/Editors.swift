@@ -1,6 +1,7 @@
 import AppKit
 import NatkeysCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Small windows for editing one slot or one scratch clipboard.
 @MainActor
@@ -20,6 +21,25 @@ enum Editors {
             onCancel: { box.close() }
         )
         present(view, title: "\(group.name) · \(slot.label)", size: NSSize(width: 460, height: 200), box: box)
+    }
+
+    /// Image slots: pick a file. The file is copied as-is (a JPG stays a JPG).
+    static func chooseImage(_ groupID: UUID, _ slot: WeekSlot, store: Store) {
+        guard let group = store.group(groupID) else { return }
+        let panel = NSOpenPanel()
+        panel.title = "\(group.name) · \(slot.label)"
+        panel.message = "Choose the image for \(group.name) · \(slot.label)"
+        panel.prompt = "Use Image"
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        if store.setSlotImage(groupID, slot, fromFile: url) {
+            HUD.show("Saved to \(group.name) · \(slot.label)", symbol: "photo")
+        } else {
+            NSSound.beep()
+        }
     }
 
     static func editScratch(_ id: UUID, store: Store) {

@@ -226,8 +226,23 @@ private struct WeeklySettings: View {
             ForEach(store.data.groups) { group in
                 Section {
                     CommitTextField(title: "Group name", value: group.name) { store.renameGroup(group.id, to: $0) }
-                    TextField("This Week", text: store.groupBinding(group.id).thisWeek)
-                    TextField("Last Week", text: store.groupBinding(group.id).lastWeek)
+                    Picker("Holds", selection: Binding(
+                        get: { group.kind },
+                        set: { store.setKind(group.id, $0) }
+                    )) {
+                        ForEach(GroupKind.allCases) { kind in
+                            Text(kind.label).tag(kind)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    switch group.kind {
+                    case .text:
+                        TextField("This Week", text: store.groupBinding(group.id).thisWeek)
+                        TextField("Last Week", text: store.groupBinding(group.id).lastWeek)
+                    case .image:
+                        ImageSlotSetting(group: group, slot: .thisWeek, store: store)
+                        ImageSlotSetting(group: group, slot: .lastWeek, store: store)
+                    }
                     Toggle("Shift automatically every Sunday at \(store.data.settings.flipTimeDescription)",
                            isOn: store.groupBinding(group.id).autoShift)
                     HStack {
@@ -240,7 +255,7 @@ private struct WeeklySettings: View {
             }
             Section {
                 Button("Add Weekly Group") { store.addGroup() }
-                Text("Each group has a This Week and a Last Week slot and appears in the panel. Use it in combos as {Group Name: This Week} or {Group Name: Last Week}.")
+                Text("Each group has a This Week and a Last Week slot and appears in the panel. A text group (such as a sermon title) can go in combos as {Group Name: This Week} or {Group Name: Last Week}. An image group (such as a sermon graphic) shows thumbnails you can drag into a website's upload box.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -256,6 +271,41 @@ private struct WeeklySettings: View {
         alert.addButton(withTitle: "Cancel")
         if alert.runModal() == .alertFirstButtonReturn {
             store.deleteGroup(group.id)
+        }
+    }
+}
+
+/// One image slot in Settings: thumbnail, file name, Choose…, Clear.
+private struct ImageSlotSetting: View {
+    let group: RotatingGroup
+    let slot: WeekSlot
+    @ObservedObject var store: Store
+
+    var body: some View {
+        LabeledContent(slot.label) {
+            HStack(spacing: 8) {
+                if let image = group[image: slot] {
+                    if let preview = store.thumbnail(image.file) {
+                        Image(nsImage: preview.image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: 56, maxHeight: 32)
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                    }
+                    Text(store.displayName(of: image, in: group))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("No image").foregroundStyle(.tertiary)
+                }
+                Button(group[image: slot] == nil ? "Choose…" : "Replace…") {
+                    Editors.chooseImage(group.id, slot, store: store)
+                }
+                if group[image: slot] != nil {
+                    Button("Clear") { store.clearSlot(group.id, slot) }
+                }
+            }
         }
     }
 }
@@ -340,7 +390,8 @@ private struct ComboSettings: View {
     private func insertMenu(_ combo: Combo) -> some View {
         let binding = store.comboBinding(combo.id)
         return Menu("Insert Field") {
-            ForEach(store.data.groups) { group in
+            // Image groups can't go in a combo, which is text.
+            ForEach(store.data.groups.filter { $0.kind == .text }) { group in
                 Section(group.name) {
                     ForEach(WeekSlot.allCases) { slot in
                         Button(slot.label) {

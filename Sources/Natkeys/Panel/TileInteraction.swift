@@ -70,6 +70,9 @@ struct TileInteraction: NSViewRepresentable {
     var onDrop: ((Clip) -> Void)?
     var onHover: (Bool) -> Void
     var onDropTarget: (Bool) -> Void
+    /// Drag-out started / ended (true when something accepted the drop).
+    var onDragBegan: (() -> Void)? = nil
+    var onDragEnded: ((Bool) -> Void)? = nil
 
     func makeNSView(context: Context) -> TileInteractionView {
         let view = TileInteractionView()
@@ -88,6 +91,8 @@ struct TileInteraction: NSViewRepresentable {
         view.onDrop = onDrop
         view.onHover = onHover
         view.onDropTarget = onDropTarget
+        view.onDragBegan = onDragBegan
+        view.onDragEnded = onDragEnded
     }
 }
 
@@ -98,6 +103,8 @@ final class TileInteractionView: NSView, NSDraggingSource {
     var onDrop: ((Clip) -> Void)?
     var onHover: ((Bool) -> Void)?
     var onDropTarget: ((Bool) -> Void)?
+    var onDragBegan: (() -> Void)?
+    var onDragEnded: ((Bool) -> Void)?
 
     private var mouseDownEvent: NSEvent?
     private var trackingArea: NSTrackingArea?
@@ -146,6 +153,7 @@ final class TileInteractionView: NSView, NSDraggingSource {
         )
         onHover?(false)
         beginDraggingSession(with: [item], event: down, source: self)
+        onDragBegan?()
     }
 
     override func mouseUp(with event: NSEvent) {
@@ -163,6 +171,10 @@ final class TileInteractionView: NSView, NSDraggingSource {
 
     func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
         context == .outsideApplication ? .copy : []
+    }
+
+    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        onDragEnded?(!operation.isEmpty)
     }
 
     // MARK: Drop destination

@@ -1,10 +1,13 @@
 import AppKit
+import ImageIO
 import UniformTypeIdentifiers
 
 /// Something Natkeys can paste, save, or drag: plain text or a PNG image.
 enum Clip: Equatable {
     case text(String)
-    case image(Data) // PNG bytes
+    /// PNG bytes for pasting. `source` is the image file it came from, if any, so weekly
+    /// groups can keep the original file (a JPG stays a JPG).
+    case image(Data, source: URL? = nil)
 
     var text: String? {
         if case .text(let s) = self { return s }
@@ -22,7 +25,7 @@ enum Clip: Equatable {
         case .text(let s):
             let line = s.split(whereSeparator: \.isNewline).first.map(String.init) ?? s
             return line.trimmingCharacters(in: .whitespaces)
-        case .image(let data):
+        case .image(let data, _):
             if let rep = NSBitmapImageRep(data: data) {
                 return "Image \(rep.pixelsWide)×\(rep.pixelsHigh)"
             }
@@ -44,6 +47,42 @@ enum ImageFiles {
             return data
         }
         return NSImage(contentsOf: url)?.pngData
+    }
+
+    /// The image file a piece of text points to: a path such as "/Users/me/Desktop/Graphic.jpg"
+    /// (what dropping a file into a text box produces) or a file:// URL.
+    static func imageFile(fromPath text: String) -> URL? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.contains(where: \.isNewline) else { return nil }
+        let url: URL
+        if trimmed.hasPrefix("file://"), let parsed = URL(string: trimmed), parsed.isFileURL {
+            url = parsed
+        } else if trimmed.hasPrefix("/") || trimmed.hasPrefix("~/") {
+            url = URL(fileURLWithPath: (trimmed as NSString).expandingTildeInPath)
+        } else {
+            return nil
+        }
+        guard isImageFile(url), FileManager.default.isReadableFile(atPath: url.path) else { return nil }
+        return url
+    }
+
+    /// Pixel size and a small preview, read without decoding the whole image.
+    static func thumbnail(at url: URL, maxPixels: Int = 240) -> (image: NSImage, pixelSize: CGSize)? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixels,
+        ]
+        guard let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+        var width = properties?[kCGImagePropertyPixelWidth] as? Int ?? thumb.width
+        var height = properties?[kCGImagePropertyPixelHeight] as? Int ?? thumb.height
+        if let orientation = properties?[kCGImagePropertyOrientation] as? Int, orientation >= 5 {
+            swap(&width, &height) // rotated 90°
+        }
+        let image = NSImage(cgImage: thumb, size: NSSize(width: thumb.width, height: thumb.height))
+        return (image, CGSize(width: width, height: height))
     }
 }
 
@@ -98,7 +137,7 @@ enum Clipboard {
         switch clip {
         case .text(let string):
             item.setString(string, forType: .string)
-        case .image(let png):
+        case .image(let png, _):
             item.setData(png, forType: .png)
             if let tiff = NSImage(data: png)?.tiffRepresentation {
                 item.setData(tiff, forType: .tiff)
@@ -121,9 +160,10 @@ enum Clipboard {
         if let urls = pasteboard.readObjects(
             forClasses: [NSURL.self],
             options: [.urlReadingFileURLsOnly: true]
-        ) as? [URL],
-            let png = urls.lazy.compactMap({ ImageFiles.pngData(at: $0) }).first {
-            return .image(png)
+        ) as? [URL] {
+            for url in urls {
+                if let png = ImageFiles.pngData(at: url) { return .image(png, source: url) }
+            }
         }
 
         let string = pasteboard.string(forType: .string)

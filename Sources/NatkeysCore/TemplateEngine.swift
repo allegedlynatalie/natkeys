@@ -42,6 +42,9 @@ public enum TemplateEngine {
                 case .unknown:
                     output += "{\(inner)}"
                     problems.append("Unknown field {\(inner)}")
+                case .image(let groupName):
+                    output += "⟨\(groupName)⟩"
+                    problems.append("\(groupName) holds images, which can't go in a combo")
                 }
                 index = template.index(after: close)
             } else {
@@ -76,6 +79,8 @@ public enum TemplateEngine {
         case value(String)
         case empty(String)
         case unknown
+        /// The field names an image group.
+        case image(String)
     }
 
     private static func resolve(_ inner: String, groups: [RotatingGroup], clock: WeekClock, now: Date) -> Resolution {
@@ -98,6 +103,7 @@ public enum TemplateEngine {
             } else {
                 return .unknown
             }
+            if group.kind == .image { return .image(group.name) }
             let value = group[slot].trimmingCharacters(in: .whitespacesAndNewlines)
             return value.isEmpty ? .empty("\(group.name) · \(slot.label)") : .value(value)
         }

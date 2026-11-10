@@ -243,3 +243,56 @@ struct ModelTests {
         #expect(s.displayTitle == "First line")
     }
 }
+
+@Suite("Image groups")
+struct ImageGroupTests {
+    private let graphicA = GroupImage(file: "A.jpg", name: "Narrow Gate.jpg")
+    private let graphicB = GroupImage(file: "B.png", name: "Fishing.png")
+
+    @Test func oldDataDecodesAsTextGroups() throws {
+        let group = try JSONDecoder().decode(RotatingGroup.self, from: Data(#"{"name":"Sermon Title","thisWeek":"Hi"}"#.utf8))
+        #expect(group.kind == .text)
+        #expect(group.thisWeekImage == nil)
+        #expect(group.canShift)
+    }
+
+    @Test func shiftMovesTheImage() {
+        var group = RotatingGroup(name: "Sermon Graphic", kind: .image, thisWeekImage: graphicB, lastWeekImage: graphicA)
+        #expect(group.canShift)
+        group.shift()
+        #expect(group.lastWeekImage == graphicB)
+        #expect(group.thisWeekImage == nil)
+        #expect(!group.canShift)
+        #expect(group.imageFiles == ["B.png"])
+    }
+
+    @Test func emptyImageThisWeekIsNotShiftedEvenWithText() {
+        // Text left over from before the group became an image group doesn't count.
+        let group = RotatingGroup(name: "Sermon Graphic", kind: .image, thisWeek: "/Users/me/old.jpg", lastWeekImage: graphicA)
+        #expect(group.isEmpty(.thisWeek))
+        #expect(!group.canShift)
+    }
+
+    @Test func autoShiftMovesImages() {
+        var data = AppData.defaults()
+        data.groups = [RotatingGroup(name: "Sermon Graphic", kind: .image, thisWeekImage: graphicB, lastWeekImage: graphicA)]
+        AutoShift.run(&data, now: localDate(2026, 11, 7))   // baseline (Saturday)
+        let shifted = AutoShift.run(&data, now: localDate(2026, 11, 8, 14, 5))
+        #expect(shifted == ["Sermon Graphic"])
+        #expect(data.groups[0].lastWeekImage == graphicB)
+        #expect(data.referencedImageFiles == ["B.png"])
+    }
+
+    @Test func combosReportImageGroups() {
+        let groups = [RotatingGroup(name: "Sermon Graphic", kind: .image, lastWeekImage: graphicA)]
+        let result = TemplateEngine.render("{Sermon Graphic: Last Week}", groups: groups, clock: clock, now: date(2026, 11, 4))
+        #expect(!result.isComplete)
+        #expect(result.text == "⟨Sermon Graphic⟩")
+    }
+
+    @Test func imageSlotsRoundTrip() throws {
+        let group = RotatingGroup(name: "Sermon Graphic", kind: .image, lastWeekImage: graphicA)
+        let decoded = try JSONDecoder().decode(RotatingGroup.self, from: JSONEncoder().encode(group))
+        #expect(decoded == group)
+    }
+}

@@ -124,20 +124,29 @@ struct PanelView: View {
     // MARK: Weekly groups
 
     private func groupSection(_ group: RotatingGroup) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: group.kind == .image ? 4 : 2) {
             SectionHeader(title: group.name) {
                 Button {
                     controller.shift(group.id)
                 } label: {
-                    Label("Shift This → Last", systemImage: "arrow.down.to.line")
+                    Label("Shift This → Last", systemImage: group.kind == .image ? "arrow.left.to.line" : "arrow.down.to.line")
                         .font(.system(size: 11))
                 }
                 .buttonStyle(.borderless)
                 .disabled(!group.canShift)
                 .help("Move This Week's \(group.name.lowercased()) into Last Week. Happens automatically Sundays at \(store.data.settings.flipTimeDescription).")
             }
-            ForEach(WeekSlot.allCases) { slot in
-                slotRow(group, slot)
+            switch group.kind {
+            case .text:
+                ForEach(WeekSlot.allCases) { slot in
+                    slotRow(group, slot)
+                }
+            case .image:
+                // Side by side, in time order: Last Week on the left, This Week on the right.
+                HStack(spacing: 8) {
+                    ImageSlotTile(group: group, slot: .lastWeek, store: store, session: session, controller: controller)
+                    ImageSlotTile(group: group, slot: .thisWeek, store: store, session: session, controller: controller)
+                }
             }
         }
     }
@@ -381,7 +390,7 @@ private struct SourceChip: View {
                 Text(title)
                     .fontWeight(.semibold)
                 switch clip {
-                case .image(let data):
+                case .image(let data, _):
                     if let image = NSImage(data: data) {
                         Image(nsImage: image)
                             .resizable()
@@ -508,7 +517,9 @@ struct ScratchTile: View {
                     menu: { menu },
                     onDrop: { clip in controller.dropped(clip, on: scratch.id) },
                     onHover: { hovering = $0 },
-                    onDropTarget: { dropTarget = $0 }
+                    onDropTarget: { dropTarget = $0 },
+                    onDragBegan: { controller.dragOutBegan() },
+                    onDragEnded: { controller.dragOutEnded(dropped: $0) }
                 )
             )
 
@@ -593,6 +604,156 @@ struct ScratchTile: View {
         }
         items.append(.separator)
         items.append(MenuAction(title: "Delete", destructive: true) { controller.deleteScratch(scratch.id) })
+        return items
+    }
+}
+
+/// One slot of an image weekly group: a thumbnail you can click to paste, drag out to a
+/// website's upload box, or drop a new image onto.
+struct ImageSlotTile: View {
+    static let height: CGFloat = 58
+
+    let group: RotatingGroup
+    let slot: WeekSlot
+    @ObservedObject var store: Store
+    @ObservedObject var session: PanelSession
+    let controller: PanelController
+
+    @State private var hovering = false
+    @State private var dropTarget = false
+
+    private var image: GroupImage? { group[image: slot] }
+
+    private var preview: (image: NSImage, pixelSize: CGSize)? {
+        image.flatMap { store.thumbnail($0.file) }
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            HStack(spacing: 8) {
+                thumbnail
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(slot.label.uppercased())
+                        .font(.system(size: 9, weight: .semibold))
+                        .tracking(0.5)
+                        .foregroundStyle(.secondary)
+                    if let image {
+                        Text((store.displayName(of: image, in: group) as NSString).deletingPathExtension)
+                            .font(.system(size: 12))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Text(details(image))
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    } else {
+                        Text("Drag image here")
+                            .font(.system(size: 12))
+                            .italic()
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, 7)
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .overlay(
+                TileInteraction(
+                    onClick: { controller.pasteSlot(group, slot) },
+                    dragPayload: dragPayload,
+                    menu: { menu },
+                    onDrop: { clip in controller.dropped(clip, onImageSlot: slot, of: group.id) },
+                    onHover: { hovering = $0 },
+                    onDropTarget: { dropTarget = $0 },
+                    onDragBegan: { controller.dragOutBegan() },
+                    onDragEnded: { controller.dragOutEnded(dropped: $0) }
+                )
+            )
+
+            if session.armedIsImage {
+                SaveButton { controller.saveArmed(group: group.id, slot: slot) }
+                    .padding(.trailing, 6)
+            }
+        }
+        .frame(height: ImageSlotTile.height)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(hovering ? Color.accentColor.opacity(0.16) : Color.primary.opacity(image == nil ? 0.02 : 0.06))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(
+                    dropTarget ? Color.accentColor : (image == nil ? Color.secondary.opacity(0.45) : Color.clear),
+                    style: StrokeStyle(lineWidth: dropTarget ? 2 : 1, dash: dropTarget || image != nil ? [] : [4, 3])
+                )
+        )
+        .help(helpText)
+    }
+
+    @ViewBuilder
+    private var thumbnail: some View {
+        if let preview {
+            Image(nsImage: preview.image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: 72, maxHeight: 44)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.primary.opacity(0.12)))
+                .frame(width: 72, height: 44)
+        } else {
+            Image(systemName: image == nil ? "photo.badge.plus" : "exclamationmark.triangle")
+                .font(.system(size: 18))
+                .foregroundStyle(.tertiary)
+                .frame(width: 72, height: 44)
+                .background(RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.05)))
+        }
+    }
+
+    private func details(_ image: GroupImage) -> String {
+        let type = URL(fileURLWithPath: image.file).pathExtension.uppercased()
+        guard let size = preview?.pixelSize else { return type.isEmpty ? "Image" : type }
+        return "\(Int(size.width))×\(Int(size.height)) · \(type)"
+    }
+
+    private var helpText: String {
+        if image == nil {
+            return "Drop an image here, or click to choose a file."
+        }
+        return "Drag into a website's upload box or a document. Click to paste. Drop another image to replace it."
+    }
+
+    private var dragPayload: (() -> DragPayload?)? {
+        guard let image else { return nil }
+        return {
+            guard let url = store.dragFileURL(for: image, in: group) else { return nil }
+            let picture = store.thumbnail(image.file)?.image ?? NSImage(contentsOf: url) ?? NSImage()
+            return DragPayload(writer: url as NSURL, image: DragImages.forImage(picture))
+        }
+    }
+
+    private var menu: [MenuAction] {
+        var items: [MenuAction] = []
+        if image != nil {
+            items.append(MenuAction(title: "Paste") { controller.pasteSlot(group, slot) })
+            items.append(MenuAction(title: "Copy") { controller.copySlotImage(group, slot) })
+            items.append(MenuAction(title: "Show in Finder") { controller.revealSlotImage(group, slot) })
+            items.append(.separator)
+        }
+        items.append(MenuAction(title: image == nil ? "Choose Image…" : "Replace with File…") {
+            controller.edit(group: group.id, slot: slot)
+        })
+        if session.clipboard?.isImage == true {
+            items.append(MenuAction(title: "Replace with Clipboard") {
+                controller.replaceSlotImageWithClipboard(group.id, slot)
+            })
+        }
+        if image != nil {
+            items.append(MenuAction(title: "Clear", destructive: true) { controller.clearSlot(group.id, slot) })
+        }
+        items.append(.separator)
+        items.append(MenuAction(title: "Weekly Group Settings…") { controller.openSettings(.weekly) })
         return items
     }
 }

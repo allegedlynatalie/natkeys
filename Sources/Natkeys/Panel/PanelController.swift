@@ -67,6 +67,13 @@ final class PanelSession: ObservableObject {
 
     var armedText: String? { armedClip?.text }
 
+    /// Whether the armed item can go in an image slot: an image, or the path of an image file.
+    var armedIsImage: Bool {
+        guard let clip = armedClip else { return false }
+        if clip.isImage { return true }
+        return clip.text.flatMap(ImageFiles.imageFile(fromPath:)) != nil
+    }
+
     func prepare(selection: Clip?, clipboard: Clip?, trusted: Bool) {
         self.selection = selection
         // Don't offer the clipboard separately when it's the same as the selection.
@@ -154,6 +161,8 @@ final class PanelController {
     func close() {
         removeMonitors()
         panel?.orderOut(nil)
+        panel?.alphaValue = 1
+        panel?.ignoresMouseEvents = false
         session.clear()
     }
 
@@ -306,12 +315,63 @@ final class PanelController {
     }
 
     func pasteSlot(_ group: RotatingGroup, _ slot: WeekSlot) {
-        let value = group[slot]
-        if value.isEmpty {
-            edit(group: group.id, slot: slot)
-        } else {
-            pasteText(value)
+        switch group.kind {
+        case .text:
+            let value = group[slot]
+            if value.isEmpty {
+                edit(group: group.id, slot: slot)
+            } else {
+                pasteText(value)
+            }
+        case .image:
+            if let image = group[image: slot], let clip = store.clip(for: image) {
+                paste(clip)
+            } else {
+                edit(group: group.id, slot: slot)
+            }
         }
+    }
+
+    func copySlotImage(_ group: RotatingGroup, _ slot: WeekSlot) {
+        if let image = group[image: slot], let clip = store.clip(for: image) { copy(clip) }
+    }
+
+    /// Something dropped on an image slot.
+    func dropped(_ clip: Clip, onImageSlot slot: WeekSlot, of groupID: UUID) {
+        guard let group = store.group(groupID) else { return }
+        if store.setSlotImage(groupID, slot, to: clip) {
+            HUD.show("Saved to \(group.name) · \(slot.label)", symbol: "photo")
+        } else {
+            HUD.show("Drop an image file or picture here", symbol: "exclamationmark.triangle.fill")
+        }
+    }
+
+    func replaceSlotImageWithClipboard(_ groupID: UUID, _ slot: WeekSlot) {
+        guard let clip = Clipboard.read(.general), store.setSlotImage(groupID, slot, to: clip) else {
+            HUD.show("The clipboard doesn't have an image", symbol: "exclamationmark.triangle.fill")
+            return
+        }
+    }
+
+    func revealSlotImage(_ group: RotatingGroup, _ slot: WeekSlot) {
+        guard let image = group[image: slot], let url = store.dragFileURL(for: image, in: group) else { return }
+        close()
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    // MARK: Dragging out
+
+    /// While something is dragged out of the panel, the panel turns see-through and stops
+    /// catching the mouse, so it doesn't cover the website's "drop image here" box.
+    func dragOutBegan() {
+        panel?.ignoresMouseEvents = true
+        panel?.alphaValue = 0.2
+    }
+
+    func dragOutEnded(dropped: Bool) {
+        panel?.ignoresMouseEvents = false
+        panel?.alphaValue = 1
+        if dropped { close() }
     }
 
     func pasteCombo(_ rendered: RenderedTemplate) {
@@ -335,8 +395,17 @@ final class PanelController {
     }
 
     func saveArmed(group groupID: UUID, slot: WeekSlot) {
-        guard let text = session.armedText, let group = store.group(groupID) else { return }
-        store.setSlot(groupID, slot, to: text)
+        guard let clip = session.armedClip, let group = store.group(groupID) else { return }
+        switch group.kind {
+        case .text:
+            guard let text = clip.text else { return }
+            store.setSlot(groupID, slot, to: text)
+        case .image:
+            guard store.setSlotImage(groupID, slot, to: clip) else {
+                HUD.show("That isn't an image", symbol: "exclamationmark.triangle.fill")
+                return
+            }
+        }
         close()
         HUD.show("Saved to \(group.name) · \(slot.label)")
     }
@@ -382,7 +451,7 @@ final class PanelController {
     }
 
     func clearSlot(_ groupID: UUID, _ slot: WeekSlot) {
-        store.setSlot(groupID, slot, to: "")
+        store.clearSlot(groupID, slot)
     }
 
     func togglePin(_ id: UUID) {
@@ -393,9 +462,14 @@ final class PanelController {
         store.deleteScratch(id)
     }
 
+    /// Text slots open a small editor; image slots open a file chooser.
     func edit(group groupID: UUID, slot: WeekSlot) {
         close()
-        Editors.editSlot(groupID, slot, store: store)
+        if store.group(groupID)?.kind == .image {
+            Editors.chooseImage(groupID, slot, store: store)
+        } else {
+            Editors.editSlot(groupID, slot, store: store)
+        }
     }
 
     func edit(scratch id: UUID) {

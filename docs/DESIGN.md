@@ -24,6 +24,22 @@ Settled in a design interview on 2026-11-04. Change these deliberately.
   A manual Shift before a flip covers that flip, so it doesn't shift twice. Tracking is by Sunday
   date, so changing the flip time can't cause a double shift.
 
+## Image groups (added 2026-11-05)
+- Each weekly group is **Text** or **Image** (Settings → Weekly Groups → Holds). Text and images are
+  stored in separate fields, so switching kinds loses nothing. Switching to Image imports a slot
+  whose text is an image file path.
+- Image slots show side by side in time order (Last Week left, This Week right) to save height.
+  Empty slots say "Drag image here"; clicking one opens a file chooser.
+- The original file's bytes and name are kept (a JPG stays a JPG, so it stays under
+  upload limits). Images from a browser or the clipboard with no file are saved as PNG.
+- Dragging a thumbnail out hands over a file URL copy named after the original, which is what
+  websites' upload boxes accept. While dragging, the panel turns see-through and ignores the
+  mouse so it doesn't cover the drop box, and it closes after a successful drop. Scratch tiles do
+  the same.
+- Shift moves the image like text. Files nothing refers to any more (last week's graphic after a
+  shift) are deleted from the Images folder, never when data.json failed to load.
+- Image groups can't go in combos (combos are text); Insert Field leaves them out.
+
 ## Dates
 - Grid columns: Last Sunday, Today, Coming Sunday. Default rows: `MMMM d`, `MM-dd-yy`,
   `MMMM d, yyyy`, `M/d/yy`, `EEEE, MMMM d`.

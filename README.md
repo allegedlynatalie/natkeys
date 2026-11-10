@@ -19,6 +19,7 @@ images you copied with "Copy Image".
 | Section | What it does |
 | --- | --- |
 | **Sermon Title** (and any other weekly groups) | This Week / Last Week. **Shift This → Last** moves This Week down. This also happens automatically **every Sunday at 2:00 PM**, and catches up if the Mac was off. |
+| **Image groups** (such as Sermon Graphic) | Two thumbnails side by side: Last Week on the left, This Week on the right. Drop an image onto a slot to save it (or click an empty slot to choose a file). **Drag a thumbnail straight into a website's upload box**, or click it to paste. The original file is kept, so a JPG stays a small JPG and uploads under its own name. |
 | **Combos** | One-click templates such as `The Narrow Gate – November 1`. |
 | **Dates** | Every format × Last Sunday / Today / Coming Sunday. On Sundays the dates flip at 2:00 PM, matching the sermon shift. |
 | **Scratch** | Text or image clipboards. Pinned ones always show; the rest are under **More**. Click to paste, drag an image straight into a website's upload box, or drop text or images onto a tile to save them. |
@@ -37,7 +38,7 @@ shortcut, in System Settings → Keyboard → Keyboard Shortcuts… → Services
 
 **Settings** (gear icon in the panel, or the ⌨︎ menu bar icon → Settings…) has these tabs:
 - **General:** Sunday flip time, clipboard restore, launch at login, Export/Import backup.
-- **Weekly Groups:** rename groups, add new ones (Scripture, Preacher…), edit values, and turn auto-shift on or off per group.
+- **Weekly Groups:** rename groups, add new ones (Scripture, Preacher…), edit values, and turn auto-shift on or off per group. **Holds: Text / Image** sets what a group stores. Switching a group to Image picks up a slot that holds the path of an image file (for example, from dropping a file into the text box), and its text is kept in case you switch back.
 - **Combos:** edit templates. **Insert Field** adds `{Sermon Title: Last Week}`, `{Last Sunday: MMMM d}`, and similar fields.
 - **Date Formats:** add, remove, and reorder rows of the date grid.
 - **Scratch:** name, pin, reorder, and edit scratch clipboards.
