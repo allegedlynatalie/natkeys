@@ -153,3 +153,9 @@ scripts/               build, install, and release scripts
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Support
+
+If you found this helpful and want to support ongoing maintenance:
+
+[![Buy Me A Coffee](https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png)](https://buymeacoffee.com/allegedlynatalie)
