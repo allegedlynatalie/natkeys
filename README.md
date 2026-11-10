@@ -96,3 +96,7 @@ Sources/Natkeys/
 Tests/NatkeysCoreTests/
 docs/DESIGN.md         the decisions behind how it works
 ```
+
+## License
+
+MIT. See [LICENSE](LICENSE).

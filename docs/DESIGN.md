@@ -83,6 +83,7 @@ Settled in a design interview on 2026-11-04. Change these deliberately.
   open the panel 0.15 s later. Service calls are synchronous, so the other app waits on them.
 
 ## App
+- App ID `io.github.allegedlynatalie.natkeys`.
 - Menu bar only (no Dock icon), with launch at login turned on the first time the installed copy runs.
 - Data stays on this Mac in `~/Library/Application Support/Natkeys`. Backup is Export/Import of a
   single JSON file that includes the images.
